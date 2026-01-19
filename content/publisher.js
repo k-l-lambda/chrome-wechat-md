@@ -102,9 +102,25 @@
         throw new Error('marked.js 未加载');
       }
 
+      // 配置 marked 选项
+      marked.setOptions({
+        breaks: true,      // 支持 GFM 换行
+        gfm: true,         // 启用 GitHub Flavored Markdown
+        headerIds: false,  // 禁用自动 header IDs
+        mangle: false      // 禁用 email 地址混淆
+      });
+
       // 使用 marked 解析 Markdown
-      const rawHtml = marked.parse(markdown);
+      let rawHtml = marked.parse(markdown);
       console.log('[WeChat Publisher] Markdown converted to HTML');
+
+      // 清理HTML：移除列表中多余的换行
+      // marked.js 在列表项之间会插入额外的换行，导致空列表项
+      rawHtml = rawHtml
+        .replace(/<li>\s*<\/li>/g, '')  // 移除空的 <li></li>
+        .replace(/<li>\s*<br\s*\/?>\s*<\/li>/g, '')  // 移除只包含 <br> 的 <li>
+        .replace(/<li>(\s*<br\s*\/?>\s*)+/g, '<li>')  // 移除 <li> 开头的 <br>
+        .replace(/(\s*<br\s*\/?>\s*)+<\/li>/g, '</li>');  // 移除 </li> 前的 <br>
 
       return rawHtml;
     }
@@ -120,13 +136,18 @@
       // 应用样式到各类元素
       // 标题
       container.querySelectorAll('h1').forEach(el => {
-        el.style.cssText = 'font-size: 1.8em; margin: 20px 0 10px; padding: 0; font-weight: bold; color: #333;';
+        el.style.cssText = 'font-size: 2em; margin: 25px 0 15px; padding: 0; font-weight: bold; color: #2c3e50; line-height: 1.4; text-align: center;';
       });
       container.querySelectorAll('h2').forEach(el => {
-        el.style.cssText = 'font-size: 1.5em; margin: 20px 0 10px; padding: 0; font-weight: bold; color: #333;';
+        el.style.cssText = 'font-size: 1.6em; margin: 20px 0 12px; padding: 0; font-weight: bold; color: #34495e; line-height: 1.4;';
       });
       container.querySelectorAll('h3').forEach(el => {
-        el.style.cssText = 'font-size: 1.3em; margin: 15px 0 10px; padding: 0; font-weight: bold; color: #333;';
+        el.style.cssText = 'font-size: 1.3em; margin: 15px 0 10px; padding: 0; font-weight: bold; color: #34495e; line-height: 1.4;';
+      });
+
+      // 分隔线
+      container.querySelectorAll('hr').forEach(el => {
+        el.style.cssText = 'border: none; border-top: 2px solid #eee; margin: 30px 0; height: 0;';
       });
 
       // 段落
@@ -185,6 +206,15 @@
 
       container.querySelectorAll('li').forEach(el => {
         el.style.cssText = 'margin: 5px 0; line-height: 1.75;';
+      });
+
+      // 强调和斜体
+      container.querySelectorAll('strong').forEach(el => {
+        el.style.cssText = 'font-weight: bold; color: #2c3e50;';
+      });
+
+      container.querySelectorAll('em').forEach(el => {
+        el.style.cssText = 'font-style: italic; color: #555;';
       });
 
       // 包装在 section 中

@@ -119,21 +119,20 @@
     // Result
     elements.retryBtn.addEventListener('click', retry);
 
-    // 快捷键: Ctrl+V 自动读取剪贴板
-    elements.markdownInput.addEventListener('keydown', async (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && elements.markdownInput.value === '') {
-        e.preventDefault();
-        try {
-          const text = await navigator.clipboard.readText();
-          if (text) {
-            elements.markdownInput.value = text;
-            updateCharCount();
-            updatePublishButton();
-          }
-        } catch (error) {
-          console.log('Clipboard read not allowed');
-        }
-      }
+    // 支持正常的 Ctrl+V 粘贴
+    // 浏览器默认会处理 paste 事件，不需要手动拦截
+    elements.markdownInput.addEventListener('paste', () => {
+      // 更新字符计数
+      setTimeout(() => {
+        updateCharCount();
+        updatePublishButton();
+      }, 10);
+    });
+
+    // 同时支持 input 事件（用户直接输入时）
+    elements.markdownInput.addEventListener('input', () => {
+      updateCharCount();
+      updatePublishButton();
     });
   }
 
