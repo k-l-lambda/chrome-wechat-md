@@ -482,6 +482,41 @@
   // 暴露到全局作用域，供 popup 调用
   window.WeChatPublisher = WeChatPublisher;
 
+  // 监听来自 popup 的消息
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'publish') {
+      const publisher = new WeChatPublisher();
+
+      // 设置进度回调
+      publisher.onProgress((msg) => {
+        console.log('[Progress]', msg);
+      });
+
+      // 执行发布（异步）
+      publisher.publish(request.markdown, request.title)
+        .then(result => {
+          sendResponse(result);
+        })
+        .catch(error => {
+          sendResponse({
+            success: false,
+            error: error.message
+          });
+        });
+
+      // 返回 true 表示异步响应
+      return true;
+    }
+
+    if (request.action === 'checkStatus') {
+      // 检查是否有 token
+      const scriptText = document.documentElement.outerHTML;
+      const hasToken = /token\s*[:=]\s*["']([^"']+)["']/.test(scriptText);
+      sendResponse({ hasToken });
+      return true;
+    }
+  });
+
   console.log('[WeChat Publisher] Content script loaded');
 
 })();

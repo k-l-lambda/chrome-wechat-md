@@ -63,17 +63,12 @@
         return false;
       }
 
-      // 执行脚本检查 token
-      const result = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: () => {
-          const scriptText = document.documentElement.outerHTML;
-          const hasToken = /token\s*[:=]\s*["']([^"']+)["']/.test(scriptText);
-          return hasToken;
-        }
+      // 发送消息到 content script 检查状态
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: 'checkStatus'
       });
 
-      if (result[0].result) {
+      if (response && response.hasToken) {
         updateStatus('success', '已登录');
         return true;
       } else {
@@ -83,7 +78,11 @@
 
     } catch (error) {
       console.error('Check status failed:', error);
-      updateStatus('error', '检查状态失败');
+      if (error.message && error.message.includes('Receiving end does not exist')) {
+        updateStatus('warning', '请刷新页面后重试');
+      } else {
+        updateStatus('warning', '内容脚本未加载');
+      }
       return false;
     }
   }
@@ -281,28 +280,12 @@
         throw new Error('请在微信公众号后台页面使用此功能');
       }
 
-      // 注入并执行发布脚本
-      const result = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: async (md, t) => {
-          if (typeof WeChatPublisher === 'undefined') {
-            return { success: false, error: 'WeChatPublisher 未加载' };
-          }
-
-          const publisher = new WeChatPublisher();
-
-          // 设置进度回调
-          publisher.onProgress((msg) => {
-            console.log('[Progress]', msg);
-          });
-
-          // 执行发布
-          return await publisher.publish(md, t);
-        },
-        args: [markdown, title]
+      // 发送消息到 content script 执行发布
+      const publishResult = await chrome.tabs.sendMessage(tab.id, {
+        action: 'publish',
+        markdown: markdown,
+        title: title
       });
-
-      const publishResult = result[0].result;
 
       if (publishResult.success) {
         showSuccess(publishResult.draftUrl);
@@ -313,7 +296,11 @@
 
     } catch (error) {
       console.error('Publish failed:', error);
-      showError(error.message);
+      if (error.message && error.message.includes('Receiving end does not exist')) {
+        showError('内容脚本未加载，请：\n1. 刷新微信公众号页面\n2. 确保已登录并访问后台\n3. 重新打开扩展弹窗');
+      } else {
+        showError(error.message || '发布失败，请确保已登录微信公众号');
+      }
     }
   }
 
