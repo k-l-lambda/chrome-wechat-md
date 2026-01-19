@@ -1,0 +1,32 @@
+/**
+ * WeChat Markdown Publisher - Content Script UI
+ * 注入到微信页面的 UI 样式 (可选,如需要悬浮按钮时使用)
+ */
+
+/* 悬浮按钮样式 (未来扩展) */
+.wechat-md-publisher-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #07c160 0%, #06ad56 100%);
+  box-shadow: 0 4px 12px rgba(7, 193, 96, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.wechat-md-publisher-fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(7, 193, 96, 0.45);
+}
+
+.wechat-md-publisher-fab::before {
+  content: '📝';
+  font-size: 24px;
+}

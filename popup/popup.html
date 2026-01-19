@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WeChat Markdown Publisher</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>📝 微信 Markdown 发布</h1>
+      <p class="subtitle">发布 Markdown 到微信公众号草稿箱</p>
+    </div>
+
+    <!-- Status Badge -->
+    <div id="status-badge" class="status-badge status-idle">
+      <span id="status-text">未登录</span>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Tab Navigation -->
+      <div class="tabs">
+        <button class="tab active" data-tab="paste">粘贴文本</button>
+        <button class="tab" data-tab="file">选择文件</button>
+      </div>
+
+      <!-- Tab: Paste Text -->
+      <div id="tab-paste" class="tab-content active">
+        <div class="form-group">
+          <label for="article-title">文章标题</label>
+          <input type="text" id="article-title" placeholder="输入文章标题" />
+        </div>
+
+        <div class="form-group">
+          <label for="markdown-input">Markdown 内容</label>
+          <textarea
+            id="markdown-input"
+            placeholder="在此粘贴 Markdown 内容，或按 Ctrl+V 自动读取剪贴板"
+            rows="10"
+          ></textarea>
+          <div class="char-count">
+            <span id="char-count">0</span> 字符
+          </div>
+        </div>
+
+        <button id="publish-btn" class="btn btn-primary" disabled>
+          <span class="btn-icon">🚀</span>
+          <span class="btn-text">发布到草稿箱</span>
+        </button>
+      </div>
+
+      <!-- Tab: Select File -->
+      <div id="tab-file" class="tab-content">
+        <div class="file-drop-zone" id="file-drop-zone">
+          <div class="file-drop-content">
+            <span class="file-icon">📄</span>
+            <p>拖放 .md 文件到这里</p>
+            <p class="file-drop-hint">或点击下方按钮选择</p>
+            <input type="file" id="file-input" accept=".md,.markdown,.txt" hidden />
+            <button id="select-file-btn" class="btn btn-secondary">选择文件</button>
+          </div>
+          <div id="file-info" class="file-info" style="display: none;">
+            <span class="file-name"></span>
+            <button id="clear-file-btn" class="btn-icon-only">✕</button>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 1rem;">
+          <label for="file-article-title">文章标题</label>
+          <input type="text" id="file-article-title" placeholder="自动从文件名提取" />
+        </div>
+
+        <button id="publish-file-btn" class="btn btn-primary" disabled>
+          <span class="btn-icon">🚀</span>
+          <span class="btn-text">发布到草稿箱</span>
+        </button>
+      </div>
+
+      <!-- Progress Section -->
+      <div id="progress-section" class="progress-section" style="display: none;">
+        <div class="progress-header">
+          <span id="progress-text">准备中...</span>
+          <span id="progress-spinner" class="spinner"></span>
+        </div>
+        <div class="progress-bar">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- Result Section -->
+      <div id="result-section" class="result-section" style="display: none;">
+        <div id="result-success" class="result-success" style="display: none;">
+          <div class="result-icon">✅</div>
+          <div class="result-content">
+            <h3>发布成功！</h3>
+            <p>文章已保存到草稿箱</p>
+            <a id="draft-link" href="#" target="_blank" class="btn btn-link">
+              查看草稿
+            </a>
+          </div>
+        </div>
+
+        <div id="result-error" class="result-error" style="display: none;">
+          <div class="result-icon">❌</div>
+          <div class="result-content">
+            <h3>发布失败</h3>
+            <p id="error-message"></p>
+            <button id="retry-btn" class="btn btn-secondary">重试</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-links">
+        <a href="#" id="help-link">使用帮助</a>
+        <span class="divider">|</span>
+        <a href="#" id="settings-link">设置</a>
+      </div>
+      <div class="footer-info">
+        <span class="version">v1.0.0</span>
+        <span class="divider">•</span>
+        <span class="permissions">最小权限设计</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "WeChat Markdown Publisher",
+  "description": "发布 Markdown 文章到微信公众号，最小权限设计",
+  "version": "1.0.0",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://mp.weixin.qq.com/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mp.weixin.qq.com/*"],
+      "js": [
+        "lib/marked.min.js",
+        "content/publisher.js"
+      ],
+      "css": ["content/ui.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["https://mp.weixin.qq.com/*"]
+    }
+  ]
+}
