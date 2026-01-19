@@ -6,7 +6,7 @@
 (function() {
   'use strict';
 
-  // DOM 元素
+  // DOM elements
   const elements = {
     // Tabs
     tabs: document.querySelectorAll('.tab'),
@@ -63,7 +63,7 @@
         return false;
       }
 
-      // 发送消息到 content script 检查状态
+      // Send message to content script to check status
       const response = await chrome.tabs.sendMessage(tab.id, {
         action: 'checkStatus'
       });
@@ -95,7 +95,7 @@
 
   // 设置事件监听
   function setupEventListeners() {
-    // Tab 切换
+    // Tab switching
     elements.tabs.forEach(tab => {
       tab.addEventListener('click', () => switchTab(tab.dataset.tab));
     });
@@ -119,8 +119,8 @@
     // Result
     elements.retryBtn.addEventListener('click', retry);
 
-    // 支持正常的 Ctrl+V 粘贴
-    // 浏览器默认会处理 paste 事件，不需要手动拦截
+    // Support normal Ctrl+V paste
+    // Browser handles paste event by default, no manual interception needed
     elements.markdownInput.addEventListener('paste', () => {
       // 更新字符计数
       setTimeout(() => {
@@ -129,7 +129,7 @@
       }, 10);
     });
 
-    // 同时支持 input 事件（用户直接输入时）
+    // Also support input event (when user types)
     elements.markdownInput.addEventListener('input', () => {
       updateCharCount();
       updatePublishButton();
@@ -279,7 +279,7 @@
         throw new Error('请在微信公众号后台页面使用此功能');
       }
 
-      // 发送消息到 content script 执行发布
+      // Send message to content script to execute publish
       const publishResult = await chrome.tabs.sendMessage(tab.id, {
         action: 'publish',
         markdown: markdown,
@@ -354,7 +354,7 @@
     updatePublishButton();
   }
 
-  // 保存草稿到 storage
+  // Save draft to storage
   function saveDraft(draft) {
     chrome.storage.local.set({ lastDraft: draft });
   }
@@ -364,7 +364,7 @@
     try {
       const { lastDraft } = await chrome.storage.local.get('lastDraft');
       if (lastDraft && lastDraft.markdown) {
-        // 可选: 自动填充上次的内容
+        // Optional: Auto-fill last content
         // elements.markdownInput.value = lastDraft.markdown;
         // elements.articleTitle.value = lastDraft.title;
         // updateCharCount();

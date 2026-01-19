@@ -1,12 +1,12 @@
 /**
  * WeChat Markdown Publisher - Content Script
- * 在微信公众号后台页面注入，直接调用微信 API 发布文章
+ * Injected into WeChat MP backend pages to publish articles via WeChat API
  */
 
 (function() {
   'use strict';
 
-  // 微信默认样式
+  // WeChat default styles
   const WEIXIN_CSS = `
     p {
       color: rgb(51, 51, 51);
@@ -66,12 +66,12 @@
     }
 
     /**
-     * 从页面或 Cookie 获取认证 token
+     * Get authentication token from page or Cookie
      */
     async getAuthToken() {
       if (this.token) return this.token;
 
-      // 方法 1: 从页面 HTML 中提取 token
+      // Method 1: Extract token from page HTML
       const scriptText = document.documentElement.outerHTML;
       const tokenMatch = scriptText.match(/token\s*[:=]\s*["']([^"']+)["']/);
       if (tokenMatch) {
@@ -80,7 +80,7 @@
         return this.token;
       }
 
-      // 方法 2: 从 Cookie 中提取
+      // Method 2: Extract from Cookie
       const cookies = document.cookie.split(';');
       for (const cookie of cookies) {
         const [name, value] = cookie.trim().split('=');
@@ -91,50 +91,50 @@
         }
       }
 
-      throw new Error('无法获取认证 token，请确认已登录微信公众号');
+      throw new Error('Unable to get auth token, please ensure you are logged into WeChat MP');
     }
 
     /**
-     * Markdown 转 HTML
+     * Convert Markdown to HTML
      */
     convertMarkdownToHTML(markdown) {
       if (typeof marked === 'undefined') {
-        throw new Error('marked.js 未加载');
+        throw new Error('marked.js not loaded');
       }
 
-      // 配置 marked 选项
+      // Configure marked options
       marked.setOptions({
-        breaks: true,      // 支持 GFM 换行
-        gfm: true,         // 启用 GitHub Flavored Markdown
-        headerIds: false,  // 禁用自动 header IDs
-        mangle: false      // 禁用 email 地址混淆
+        breaks: true,      // Support GFM line breaks
+        gfm: true,         // Enable GitHub Flavored Markdown
+        headerIds: false,  // Disable auto header IDs
+        mangle: false      // Disable email address obfuscation
       });
 
-      // 使用 marked 解析 Markdown
+      // Parse Markdown using marked
       let rawHtml = marked.parse(markdown);
       console.log('[WeChat Publisher] Markdown converted to HTML');
 
-      // 清理HTML：移除列表中多余的换行
-      // marked.js 在列表项之间会插入额外的换行，导致空列表项
+      // Clean HTML: Remove extra line breaks in lists
+      // marked.js inserts extra line breaks between list items, creating empty items
       rawHtml = rawHtml
-        .replace(/<li>\s*<\/li>/g, '')  // 移除空的 <li></li>
-        .replace(/<li>\s*<br\s*\/?>\s*<\/li>/g, '')  // 移除只包含 <br> 的 <li>
-        .replace(/<li>(\s*<br\s*\/?>\s*)+/g, '<li>')  // 移除 <li> 开头的 <br>
-        .replace(/(\s*<br\s*\/?>\s*)+<\/li>/g, '</li>');  // 移除 </li> 前的 <br>
+        .replace(/<li>\s*<\/li>/g, '')  // Remove empty <li></li>
+        .replace(/<li>\s*<br\s*\/?>\s*<\/li>/g, '')  // Remove <li> containing only <br>
+        .replace(/<li>(\s*<br\s*\/?>\s*)+/g, '<li>')  // Remove <br> at start of <li>
+        .replace(/(\s*<br\s*\/?>\s*)+<\/li>/g, '</li>');  // Remove <br> before </li>
 
       return rawHtml;
     }
 
     /**
-     * 内联 CSS 样式（简化版：不依赖 juice.js）
+     * Inline CSS styles (simplified: no juice.js dependency)
      */
     inlineCSS(html) {
-      // 创建临时容器
+      // Create temporary container
       const container = document.createElement('div');
       container.innerHTML = html;
 
-      // 应用样式到各类元素
-      // 标题
+      // Apply styles to elements
+      // Headings
       container.querySelectorAll('h1').forEach(el => {
         el.style.cssText = 'font-size: 2em; margin: 25px 0 15px; padding: 0; font-weight: bold; color: #2c3e50; line-height: 1.4; text-align: center;';
       });
@@ -145,17 +145,17 @@
         el.style.cssText = 'font-size: 1.3em; margin: 15px 0 10px; padding: 0; font-weight: bold; color: #34495e; line-height: 1.4;';
       });
 
-      // 分隔线
+      // Horizontal rules
       container.querySelectorAll('hr').forEach(el => {
         el.style.cssText = 'border: none; border-top: 2px solid #eee; margin: 30px 0; height: 0;';
       });
 
-      // 段落
+      // Paragraphs
       container.querySelectorAll('p').forEach(el => {
         el.style.cssText = 'margin: 10px 0; line-height: 1.75; color: #3f3f3f;';
       });
 
-      // 代码块
+      // Code blocks
       container.querySelectorAll('pre').forEach(el => {
         el.style.cssText = 'background: #f6f8fa; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 10px 0; line-height: 1.5;';
       });
@@ -164,19 +164,19 @@
         el.style.cssText = 'font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; font-size: 14px; color: #24292e;';
       });
 
-      // 行内代码
+      // Inline code
       container.querySelectorAll('code').forEach(el => {
         if (el.parentElement.tagName !== 'PRE') {
           el.style.cssText = 'background: #f6f8fa; padding: 2px 5px; border-radius: 3px; font-family: "SFMono-Regular", Consolas, monospace; color: #e83e8c; font-size: 0.9em;';
         }
       });
 
-      // 引用
+      // Blockquotes
       container.querySelectorAll('blockquote').forEach(el => {
         el.style.cssText = 'border-left: 4px solid #dfe2e5; padding-left: 15px; margin: 10px 0; color: #6a737d; font-style: italic;';
       });
 
-      // 表格
+      // Tables
       container.querySelectorAll('table').forEach(el => {
         el.style.cssText = 'border-collapse: collapse; width: 100%; margin: 10px 0;';
       });
@@ -189,17 +189,17 @@
         el.style.cssText = 'border: 1px solid #dfe2e5; padding: 8px 12px; text-align: left;';
       });
 
-      // 链接
+      // Links
       container.querySelectorAll('a').forEach(el => {
         el.style.cssText = 'color: #0366d6; text-decoration: none;';
       });
 
-      // 图片
+      // Images
       container.querySelectorAll('img').forEach(el => {
         el.style.cssText = 'max-width: 100%; height: auto; display: block; margin: 10px auto;';
       });
 
-      // 列表
+      // Lists
       container.querySelectorAll('ul, ol').forEach(el => {
         el.style.cssText = 'margin: 10px 0; padding-left: 20px;';
       });
@@ -208,7 +208,7 @@
         el.style.cssText = 'margin: 5px 0; line-height: 1.75;';
       });
 
-      // 强调和斜体
+      // Emphasis and italic
       container.querySelectorAll('strong').forEach(el => {
         el.style.cssText = 'font-weight: bold; color: #2c3e50;';
       });
@@ -217,7 +217,7 @@
         el.style.cssText = 'font-style: italic; color: #555;';
       });
 
-      // 包装在 section 中
+      // Wrap in section
       const section = document.createElement('section');
       section.style.cssText = 'margin-left: 6px; margin-right: 6px; line-height: 1.75em; font-size: 16px; color: #3f3f3f; font-family: -apple-system-font, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif;';
       section.innerHTML = container.innerHTML;
@@ -262,7 +262,7 @@
         const blob = await response.blob();
         const fileName = `${Date.now()}.jpg`;
 
-        // 构造 FormData
+        // Construct FormData
         const formData = new FormData();
         formData.append('type', blob.type || 'image/jpeg');
         formData.append('id', Date.now().toString());
@@ -461,18 +461,18 @@
       try {
         console.log('[WeChat Publisher] Starting publish process...');
 
-        // 1. 转换 Markdown 到 HTML
+        // 1. Convert Markdown to HTML
         this.updateProgress('转换 Markdown...');
         let html = this.convertMarkdownToHTML(markdown);
 
-        // 2. 内联 CSS 样式
+        // 2. Inline CSS styles
         this.updateProgress('处理样式...');
         html = this.inlineCSS(html);
 
-        // 3. 上传图片
+        // 3. Upload images
         html = await this.replaceImages(html);
 
-        // 4. 发布文章
+        // 4. Publish article
         const draftUrl = await this.publishArticle(title, html);
 
         this.updateProgress('发布成功！');
@@ -509,10 +509,10 @@
     }
   }
 
-  // 暴露到全局作用域，供 popup 调用
+  // Expose to global scope for popup access
   window.WeChatPublisher = WeChatPublisher;
 
-  // 监听来自 popup 的消息
+  // Listen for messages from popup
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'publish') {
       const publisher = new WeChatPublisher();
@@ -534,12 +534,12 @@
           });
         });
 
-      // 返回 true 表示异步响应
+      // Return true for async response
       return true;
     }
 
     if (request.action === 'checkStatus') {
-      // 检查是否有 token
+      // Check if token exists
       const scriptText = document.documentElement.outerHTML;
       const hasToken = /token\s*[:=]\s*["']([^"']+)["']/.test(scriptText);
       sendResponse({ hasToken });
