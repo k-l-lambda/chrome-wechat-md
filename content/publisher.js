@@ -122,7 +122,54 @@
         .replace(/<li>(\s*<br\s*\/?>\s*)+/g, '<li>')  // Remove <br> at start of <li>
         .replace(/(\s*<br\s*\/?>\s*)+<\/li>/g, '</li>');  // Remove <br> before </li>
 
+      // Convert external links to footnotes (WeChat removes external links)
+      rawHtml = this.convertLinksToFootnotes(rawHtml);
+
       return rawHtml;
+    }
+
+    /**
+     * Convert external links to footnotes format
+     * WeChat MP removes external links, so we convert them to footnote references
+     */
+    convertLinksToFootnotes(html) {
+      const linkRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
+      const footnotes = [];
+      let footnoteIndex = 1;
+
+      // Replace links with footnote markers
+      const processedHtml = html.replace(linkRegex, (match, url, text) => {
+        // Skip internal WeChat links and anchor links
+        if (url.startsWith('#') || url.includes('mp.weixin.qq.com')) {
+          return match;
+        }
+
+        // Check if this URL already has a footnote
+        let existingIndex = footnotes.findIndex(f => f.url === url);
+        if (existingIndex === -1) {
+          footnotes.push({ url, text });
+          existingIndex = footnotes.length - 1;
+        }
+
+        const idx = existingIndex + 1;
+        return `${text}<sup style="color: #0366d6; font-size: 0.8em;">[${idx}]</sup>`;
+      });
+
+      // If no footnotes, return original
+      if (footnotes.length === 0) {
+        return html;
+      }
+
+      // Build footnotes section
+      const footnotesHtml = `
+<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+<section style="font-size: 14px; color: #666; line-height: 1.8;">
+<p style="font-weight: bold; margin-bottom: 10px;">参考链接：</p>
+${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup>[${i + 1}]</sup> ${f.text}: ${f.url}</p>`).join('\n')}
+</section>`;
+
+      console.log(`[WeChat Publisher] Converted ${footnotes.length} links to footnotes`);
+      return processedHtml + footnotesHtml;
     }
 
     /**
