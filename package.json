@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "jsdom": "^27.4.0",
+    "marked": "^17.0.1"
+  }
+}

@@ -131,8 +131,8 @@
           return '<li>' + content.replace(/\n/g, ' ').trim() + '</li>';
         });
 
-      // Convert external links to inline URL format (WeChat strips <a> tags)
-      rawHtml = this.convertLinksToInlineUrls(rawHtml);
+      // Convert external links to footnotes (WeChat rejects external links)
+      rawHtml = this.convertLinksToFootnotes(rawHtml);
 
       return rawHtml;
     }
