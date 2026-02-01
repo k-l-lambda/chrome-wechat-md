@@ -329,7 +329,7 @@ ${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup
     }
 
     /**
-     * 处理图片 - 提取所有图片 URL
+     * 处理图片 - 提取所有图片 (包括 data URLs 和外部 URLs)
      */
     extractImages(html) {
       const parser = new DOMParser();
@@ -337,32 +337,67 @@ ${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup
       const images = doc.querySelectorAll('img');
 
       const imageUrls = [];
+      const dataUrls = [];
+
       images.forEach(img => {
         const src = img.getAttribute('src');
-        if (src && !src.startsWith('data:') && !src.includes('mmbiz.qpic.cn')) {
+        if (!src || src.includes('mmbiz.qpic.cn')) {
+          return;  // Skip already uploaded WeChat CDN images
+        }
+
+        if (src.startsWith('data:')) {
+          dataUrls.push(src);
+        } else {
           imageUrls.push(src);
         }
       });
 
-      console.log(`[WeChat Publisher] Found ${imageUrls.length} external images`);
-      return imageUrls;
+      console.log(`[WeChat Publisher] Found ${imageUrls.length} external images, ${dataUrls.length} data URLs`);
+      return { imageUrls, dataUrls };
+    }
+
+    /**
+     * Convert data URL to Blob
+     */
+    dataUrlToBlob(dataUrl) {
+      const [header, base64] = dataUrl.split(',');
+      const mimeMatch = header.match(/data:([^;]+)/);
+      const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+      const binary = atob(base64);
+      const array = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        array[i] = binary.charCodeAt(i);
+      }
+      return new Blob([array], { type: mime });
     }
 
     /**
      * 上传单张图片到微信 CDN
+     * @param {string} imageSource - URL or data URL
      */
-    async uploadImage(imageUrl) {
-      this.updateProgress(`上传图片: ${imageUrl.substring(0, 50)}...`);
+    async uploadImage(imageSource) {
+      const isDataUrl = imageSource.startsWith('data:');
+      const displayName = isDataUrl ? 'data:image...' : imageSource.substring(0, 50);
+      this.updateProgress(`上传图片: ${displayName}...`);
 
       try {
-        // 下载图片
-        const response = await fetch(imageUrl);
-        if (!response.ok) {
-          throw new Error(`下载图片失败: ${response.status}`);
+        let blob;
+
+        if (isDataUrl) {
+          // Convert data URL to blob
+          blob = this.dataUrlToBlob(imageSource);
+          console.log(`[WeChat Publisher] Converted data URL to blob: ${blob.size} bytes, type: ${blob.type}`);
+        } else {
+          // 下载图片
+          const response = await fetch(imageSource);
+          if (!response.ok) {
+            throw new Error(`下载图片失败: ${response.status}`);
+          }
+          blob = await response.blob();
         }
 
-        const blob = await response.blob();
-        const fileName = `${Date.now()}.jpg`;
+        const ext = blob.type.split('/')[1] || 'jpg';
+        const fileName = `${Date.now()}.${ext}`;
 
         // Construct FormData
         const formData = new FormData();
@@ -403,31 +438,49 @@ ${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup
      * 替换 HTML 中的图片 URL
      */
     async replaceImages(html) {
-      const imageUrls = this.extractImages(html);
+      const { imageUrls, dataUrls } = this.extractImages(html);
+      const totalImages = imageUrls.length + dataUrls.length;
 
-      if (imageUrls.length === 0) {
-        console.log('[WeChat Publisher] No external images to upload');
+      if (totalImages === 0) {
+        console.log('[WeChat Publisher] No images to upload');
         return html;
       }
 
-      this.updateProgress(`开始上传 ${imageUrls.length} 张图片...`);
+      this.updateProgress(`开始上传 ${totalImages} 张图片...`);
 
       let processedHtml = html;
+      let uploadedCount = 0;
 
+      // Upload external URLs
       for (let i = 0; i < imageUrls.length; i++) {
         const originalUrl = imageUrls[i];
-        this.updateProgress(`上传图片 ${i + 1}/${imageUrls.length}`);
+        uploadedCount++;
+        this.updateProgress(`上传图片 ${uploadedCount}/${totalImages}`);
 
         try {
           const cdnUrl = await this.uploadImage(originalUrl);
           processedHtml = processedHtml.replace(originalUrl, cdnUrl);
         } catch (error) {
-          console.warn(`[WeChat Publisher] Failed to upload image ${i + 1}, keeping original URL`);
-          // 继续处理其他图片
+          console.warn(`[WeChat Publisher] Failed to upload external image ${i + 1}, keeping original URL`);
         }
       }
 
-      this.updateProgress(`图片上传完成 (${imageUrls.length})`);
+      // Upload data URLs (local images converted to base64)
+      for (let i = 0; i < dataUrls.length; i++) {
+        const dataUrl = dataUrls[i];
+        uploadedCount++;
+        this.updateProgress(`上传本地图片 ${uploadedCount}/${totalImages}`);
+
+        try {
+          const cdnUrl = await this.uploadImage(dataUrl);
+          // Data URLs are long, need to escape for regex
+          processedHtml = processedHtml.split(dataUrl).join(cdnUrl);
+        } catch (error) {
+          console.warn(`[WeChat Publisher] Failed to upload local image ${i + 1}:`, error.message);
+        }
+      }
+
+      this.updateProgress(`图片上传完成 (${totalImages})`);
       return processedHtml;
     }
 
@@ -557,11 +610,38 @@ ${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup
     }
 
     /**
+     * Extract H1 title from markdown and remove it from content
+     * Returns { title, content } where title is the H1 text (or null) and content is markdown without H1
+     */
+    extractH1Title(markdown) {
+      // Match H1 at the beginning of markdown (with optional leading whitespace/newlines)
+      const h1Regex = /^\s*#\s+(.+?)(?:\r?\n|$)/;
+      const match = markdown.match(h1Regex);
+
+      if (match) {
+        const title = match[1].trim();
+        const content = markdown.replace(h1Regex, '').trim();
+        console.log(`[WeChat Publisher] Extracted H1 title: "${title}"`);
+        return { title, content };
+      }
+
+      return { title: null, content: markdown };
+    }
+
+    /**
      * 完整发布流程
      */
     async publish(markdown, title = '未命名') {
       try {
         console.log('[WeChat Publisher] Starting publish process...');
+
+        // 0. Extract H1 as title if present
+        const extracted = this.extractH1Title(markdown);
+        if (extracted.title) {
+          title = extracted.title;
+          markdown = extracted.content;
+          console.log(`[WeChat Publisher] Using H1 as title: "${title}"`);
+        }
 
         // 1. Convert Markdown to HTML
         this.updateProgress('转换 Markdown...');

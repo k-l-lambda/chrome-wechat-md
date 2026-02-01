@@ -21,8 +21,8 @@
 
     // File Tab
     fileDropZone: document.getElementById('file-drop-zone'),
-    fileInput: document.getElementById('file-input'),
-    selectFileBtn: document.getElementById('select-file-btn'),
+    folderInput: document.getElementById('folder-input'),
+    selectFolderBtn: document.getElementById('select-folder-btn'),
     fileInfo: document.getElementById('file-info'),
     clearFileBtn: document.getElementById('clear-file-btn'),
     fileArticleTitle: document.getElementById('file-article-title'),
@@ -45,6 +45,7 @@
   };
 
   let currentFile = null;
+  let currentFolder = null;  // Map of filename -> File object for local images
 
   // 初始化
   async function init() {
@@ -106,9 +107,9 @@
     elements.articleTitle.addEventListener('input', updatePublishButton);
     elements.publishBtn.addEventListener('click', handlePublish);
 
-    // File Tab
-    elements.selectFileBtn.addEventListener('click', () => elements.fileInput.click());
-    elements.fileInput.addEventListener('change', handleFileSelect);
+    // File Tab (folder selection)
+    elements.selectFolderBtn.addEventListener('click', () => elements.folderInput.click());
+    elements.folderInput.addEventListener('change', handleFolderSelect);
     elements.clearFileBtn.addEventListener('click', clearFile);
     elements.publishFileBtn.addEventListener('click', handlePublishFile);
 
@@ -164,40 +165,67 @@
     elements.publishBtn.disabled = !hasContent || !hasTitle;
   }
 
-  // 处理文件选择
-  function handleFileSelect(e) {
-    const file = e.target.files[0];
-    if (file) {
-      loadFile(file);
+  // 处理文件夹选择
+  function handleFolderSelect(e) {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      loadFolder(files);
     }
   }
 
-  // 加载文件
-  async function loadFile(file) {
-    if (!file.name.match(/\.(md|markdown|txt)$/i)) {
-      showError('请选择 .md 或 .txt 文件');
+  // 加载文件夹
+  async function loadFolder(files) {
+    // Find markdown file
+    const mdFile = files.find(f => f.name.match(/\.(md|markdown)$/i));
+    if (!mdFile) {
+      showError('文件夹中未找到 .md 文件');
       return;
     }
 
-    currentFile = file;
+    // Build file map for images
+    currentFolder = new Map();
+    const imageExtensions = /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i;
+    let imageCount = 0;
+
+    files.forEach(file => {
+      // Store by relative path (webkitRelativePath includes folder name)
+      const relativePath = file.webkitRelativePath.split('/').slice(1).join('/');
+      currentFolder.set(relativePath, file);
+      currentFolder.set(file.name, file);  // Also store by filename for simple references
+
+      if (file.name.match(imageExtensions)) {
+        imageCount++;
+      }
+    });
+
+    currentFile = mdFile;
 
     // 显示文件信息
-    elements.fileInfo.querySelector('.file-name').textContent = file.name;
+    const folderName = mdFile.webkitRelativePath.split('/')[0];
+    elements.fileInfo.querySelector('.file-name').textContent = `${folderName}/${mdFile.name}`;
+    elements.fileInfo.querySelector('.image-count').textContent = imageCount > 0 ? `(${imageCount} 张图片)` : '';
     elements.fileInfo.style.display = 'flex';
     elements.fileDropZone.querySelector('.file-drop-content').style.display = 'none';
 
-    // 从文件名提取标题
-    const titleFromName = file.name.replace(/\.(md|markdown|txt)$/i, '');
-    elements.fileArticleTitle.value = titleFromName;
+    // 从 markdown 提取 H1 标题，若无则使用文件名
+    const markdown = await readFileContent(mdFile);
+    const h1Title = extractH1FromMarkdown(markdown);
+    const titleFromName = mdFile.name.replace(/\.(md|markdown|txt)$/i, '');
+    elements.fileArticleTitle.value = h1Title || titleFromName;
+
+    console.log(`[Popup] Title extracted: "${h1Title || titleFromName}" (H1: ${h1Title ? 'yes' : 'no'})`);
 
     // 启用发布按钮
     elements.publishFileBtn.disabled = false;
+
+    console.log(`[Popup] Loaded folder with ${files.length} files, ${imageCount} images`);
   }
 
   // 清除文件
   function clearFile() {
     currentFile = null;
-    elements.fileInput.value = '';
+    currentFolder = null;
+    elements.folderInput.value = '';
     elements.fileInfo.style.display = 'none';
     elements.fileDropZone.querySelector('.file-drop-content').style.display = 'flex';
     elements.fileArticleTitle.value = '';
@@ -211,15 +239,68 @@
     elements.fileDropZone.classList.add('drag-over');
   }
 
-  function handleDrop(e) {
+  async function handleDrop(e) {
     e.preventDefault();
     e.stopPropagation();
     elements.fileDropZone.classList.remove('drag-over');
 
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      loadFile(files[0]);
+    const items = e.dataTransfer.items;
+    if (!items || items.length === 0) return;
+
+    // Check if it's a folder drop
+    const item = items[0];
+    if (item.webkitGetAsEntry) {
+      const entry = item.webkitGetAsEntry();
+      if (entry && entry.isDirectory) {
+        // Handle folder drop
+        const files = await readDirectoryEntries(entry);
+        if (files.length > 0) {
+          loadFolder(files);
+        }
+        return;
+      }
     }
+
+    // Fallback: treat as file drop (for backwards compatibility)
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      // Check if multiple files (might be a folder)
+      if (files.length > 1 || files[0].webkitRelativePath) {
+        loadFolder(files);
+      } else {
+        showError('请选择包含 Markdown 文件的文件夹，而不是单个文件');
+      }
+    }
+  }
+
+  // Recursively read directory entries
+  async function readDirectoryEntries(directoryEntry) {
+    const files = [];
+
+    async function readEntries(entry, basePath = '') {
+      if (entry.isFile) {
+        const file = await new Promise((resolve, reject) => {
+          entry.file(resolve, reject);
+        });
+        // Simulate webkitRelativePath
+        Object.defineProperty(file, 'webkitRelativePath', {
+          value: basePath + file.name,
+          writable: false
+        });
+        files.push(file);
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const entries = await new Promise((resolve, reject) => {
+          reader.readEntries(resolve, reject);
+        });
+        for (const childEntry of entries) {
+          await readEntries(childEntry, basePath + entry.name + '/');
+        }
+      }
+    }
+
+    await readEntries(directoryEntry, directoryEntry.name + '/');
+    return files;
   }
 
   // 读取文件内容
@@ -230,6 +311,13 @@
       reader.onerror = reject;
       reader.readAsText(file);
     });
+  }
+
+  // 从 markdown 提取 H1 标题
+  function extractH1FromMarkdown(markdown) {
+    const h1Regex = /^\s*#\s+(.+?)(?:\r?\n|$)/;
+    const match = markdown.match(h1Regex);
+    return match ? match[1].trim() : null;
   }
 
   // 发布文章 (粘贴模式)
@@ -248,7 +336,7 @@
   // 发布文章 (文件模式)
   async function handlePublishFile() {
     if (!currentFile) {
-      showError('请选择文件');
+      showError('请选择文件夹');
       return;
     }
 
@@ -259,11 +347,63 @@
     }
 
     try {
-      const markdown = await readFileContent(currentFile);
+      let markdown = await readFileContent(currentFile);
+
+      // Process local images if folder is available
+      if (currentFolder) {
+        markdown = await processLocalImages(markdown);
+      }
+
       await publish(markdown, title);
     } catch (error) {
-      showError('读取文件失败: ' + error.message);
+      showError('处理文件失败: ' + error.message);
     }
+  }
+
+  // Extract local image references and convert to data URLs
+  async function processLocalImages(markdown) {
+    // Match markdown image syntax: ![alt](path)
+    const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    const matches = [...markdown.matchAll(imageRegex)];
+
+    console.log(`[Popup] Found ${matches.length} image references in markdown`);
+
+    for (const match of matches) {
+      const [fullMatch, alt, imagePath] = match;
+
+      // Skip external URLs
+      if (imagePath.startsWith('http://') || imagePath.startsWith('https://') || imagePath.startsWith('data:')) {
+        continue;
+      }
+
+      // Try to find the local file
+      const imageFile = currentFolder.get(imagePath) || currentFolder.get(imagePath.replace(/^\.\//, ''));
+
+      if (imageFile) {
+        console.log(`[Popup] Converting local image: ${imagePath}`);
+        try {
+          const dataUrl = await fileToDataUrl(imageFile);
+          markdown = markdown.replace(fullMatch, `![${alt}](${dataUrl})`);
+          console.log(`[Popup] Converted ${imagePath} to data URL (${dataUrl.length} chars)`);
+        } catch (error) {
+          console.warn(`[Popup] Failed to convert ${imagePath}:`, error);
+        }
+      } else {
+        console.warn(`[Popup] Local image not found: ${imagePath}`);
+      }
+    }
+
+    return markdown;
+  }
+
+  // Convert File to data URL
+  async function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 
   // 执行发布

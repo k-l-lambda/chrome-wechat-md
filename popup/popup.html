@@ -56,14 +56,15 @@
       <div id="tab-file" class="tab-content">
         <div class="file-drop-zone" id="file-drop-zone">
           <div class="file-drop-content">
-            <span class="file-icon">📄</span>
-            <p>拖放 .md 文件到这里</p>
-            <p class="file-drop-hint">或点击下方按钮选择</p>
-            <input type="file" id="file-input" accept=".md,.markdown,.txt" hidden />
-            <button id="select-file-btn" class="btn btn-secondary">选择文件</button>
+            <span class="file-icon">📁</span>
+            <p>拖放文件夹到这里</p>
+            <p class="file-drop-hint">选择包含 .md 文件和图片的文件夹</p>
+            <input type="file" id="folder-input" webkitdirectory hidden />
+            <button id="select-folder-btn" class="btn btn-secondary">选择文件夹</button>
           </div>
           <div id="file-info" class="file-info" style="display: none;">
             <span class="file-name"></span>
+            <span class="image-count"></span>
             <button id="clear-file-btn" class="btn-icon-only">✕</button>
           </div>
         </div>
