@@ -114,18 +114,53 @@
       let rawHtml = marked.parse(markdown);
       console.log('[WeChat Publisher] Markdown converted to HTML');
 
-      // Clean HTML: Remove extra line breaks in lists
-      // marked.js inserts extra line breaks between list items, creating empty items
+      // Clean HTML: Fix list rendering issues for WeChat compatibility
       rawHtml = rawHtml
-        .replace(/<li>\s*<\/li>/g, '')  // Remove empty <li></li>
-        .replace(/<li>\s*<br\s*\/?>\s*<\/li>/g, '')  // Remove <li> containing only <br>
-        .replace(/<li>(\s*<br\s*\/?>\s*)+/g, '<li>')  // Remove <br> at start of <li>
-        .replace(/(\s*<br\s*\/?>\s*)+<\/li>/g, '</li>');  // Remove <br> before </li>
+        // Remove <p> tags inside <li> (marked.js may wrap content in <p>)
+        .replace(/<li>\s*<p>([\s\S]*?)<\/p>\s*<\/li>/gi, '<li>$1</li>')
+        // Remove empty <li></li>
+        .replace(/<li>\s*<\/li>/g, '')
+        // Remove <li> containing only <br>
+        .replace(/<li>\s*<br\s*\/?>\s*<\/li>/g, '')
+        // Remove <br> at start of <li>
+        .replace(/<li>(\s*<br\s*\/?>\s*)+/g, '<li>')
+        // Remove <br> before </li>
+        .replace(/(\s*<br\s*\/?>\s*)+<\/li>/g, '</li>')
+        // Remove newlines inside list items
+        .replace(/<li>([\s\S]*?)<\/li>/gi, (_, content) => {
+          return '<li>' + content.replace(/\n/g, ' ').trim() + '</li>';
+        });
 
-      // Convert external links to footnotes (WeChat removes external links)
-      rawHtml = this.convertLinksToFootnotes(rawHtml);
+      // Convert external links to inline URL format (WeChat strips <a> tags)
+      rawHtml = this.convertLinksToInlineUrls(rawHtml);
 
       return rawHtml;
+    }
+
+    /**
+     * Convert external links to inline URL format
+     * WeChat MP removes external <a> tags, so we show URLs inline
+     */
+    convertLinksToInlineUrls(html) {
+      const linkRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
+
+      const processedHtml = html.replace(linkRegex, (match, url, text) => {
+        // Skip internal WeChat links and anchor links
+        if (url.startsWith('#') || url.includes('mp.weixin.qq.com')) {
+          return match;
+        }
+
+        // If text equals URL, just show the URL once
+        if (text === url || text.includes(url)) {
+          return `<span style="color: #0366d6;">${url}</span>`;
+        }
+
+        // Show text with URL in parentheses
+        return `<span style="color: #0366d6;">${text}</span>（<span style="color: #666; font-size: 0.9em;">${url}</span>）`;
+      });
+
+      console.log('[WeChat Publisher] External links converted to inline URLs');
+      return processedHtml;
     }
 
     /**
@@ -246,13 +281,33 @@ ${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup
         el.style.cssText = 'max-width: 100%; height: auto; display: block; margin: 10px auto;';
       });
 
-      // Lists
-      container.querySelectorAll('ul, ol').forEach(el => {
-        el.style.cssText = 'margin: 10px 0; padding-left: 20px;';
+      // Lists - convert to sections with manual bullets (WeChat has issues with native lists)
+      container.querySelectorAll('ul').forEach(ul => {
+        const section = document.createElement('section');
+        section.style.cssText = 'margin: 10px 0; padding-left: 0;';
+
+        ul.querySelectorAll(':scope > li').forEach(li => {
+          const p = document.createElement('p');
+          p.style.cssText = 'margin: 5px 0; line-height: 1.75; color: #3f3f3f; padding-left: 1.5em; text-indent: -1.5em;';
+          p.innerHTML = '• ' + li.innerHTML;
+          section.appendChild(p);
+        });
+
+        ul.replaceWith(section);
       });
 
-      container.querySelectorAll('li').forEach(el => {
-        el.style.cssText = 'margin: 5px 0; line-height: 1.75;';
+      container.querySelectorAll('ol').forEach(ol => {
+        const section = document.createElement('section');
+        section.style.cssText = 'margin: 10px 0; padding-left: 0;';
+
+        ol.querySelectorAll(':scope > li').forEach((li, index) => {
+          const p = document.createElement('p');
+          p.style.cssText = 'margin: 5px 0; line-height: 1.75; color: #3f3f3f; padding-left: 1.5em; text-indent: -1.5em;';
+          p.innerHTML = `${index + 1}. ` + li.innerHTML;
+          section.appendChild(p);
+        });
+
+        ol.replaceWith(section);
       });
 
       // Emphasis and italic
