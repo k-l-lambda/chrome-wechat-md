@@ -198,9 +198,9 @@
       // Build footnotes section
       const footnotesHtml = `
 <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-<section style="font-size: 14px; color: #666; line-height: 1.8;">
+<section style="font-size: 13px; color: #666; line-height: 1.8;">
 <p style="font-weight: bold; margin-bottom: 10px;">参考链接：</p>
-${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup>[${i + 1}]</sup> ${f.text}: ${f.url}</p>`).join('\n')}
+${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup>[${i + 1}]</sup> ${f.text}: <span style="background: #e8f4fc; color: #0969da; padding: 1px 4px; border-radius: 3px; font-size: 0.9em;">${f.url}</span></p>`).join('\n')}
 </section>`;
 
       console.log(`[WeChat Publisher] Converted ${footnotes.length} links to footnotes`);
@@ -237,9 +237,16 @@ ${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup
         el.style.cssText = 'margin: 10px 0; line-height: 1.75; color: #3f3f3f;';
       });
 
-      // Code blocks
+      // Code blocks - convert newlines to <br> for WeChat compatibility
       container.querySelectorAll('pre').forEach(el => {
-        el.style.cssText = 'background: #f6f8fa; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 10px 0; line-height: 1.5;';
+        el.style.cssText = 'background: #f6f8fa; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 10px 0; line-height: 1.6;';
+        // Convert newlines to <br> inside code blocks
+        const code = el.querySelector('code');
+        if (code) {
+          code.innerHTML = code.innerHTML.replace(/\n/g, '<br>');
+        } else {
+          el.innerHTML = el.innerHTML.replace(/\n/g, '<br>');
+        }
       });
 
       container.querySelectorAll('pre code').forEach(el => {
@@ -386,7 +393,12 @@ ${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup
         if (isDataUrl) {
           // Convert data URL to blob
           blob = this.dataUrlToBlob(imageSource);
-          console.log(`[WeChat Publisher] Converted data URL to blob: ${blob.size} bytes, type: ${blob.type}`);
+          console.log(`[WeChat Publisher] Converted data URL to blob: ${blob.size} bytes, type: ${blob.type}, isGif: ${blob.type === 'image/gif'}`);
+
+          // WeChat might have size limit (2MB for images)
+          if (blob.size > 2 * 1024 * 1024) {
+            throw new Error(`图片太大 (${Math.round(blob.size / 1024)}KB)，微信限制 2MB`);
+          }
         } else {
           // 下载图片
           const response = await fetch(imageSource);
@@ -420,9 +432,12 @@ ${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup
         });
 
         const result = await uploadResponse.json();
+        console.log(`[WeChat Publisher] Upload response:`, JSON.stringify(result));
 
         if (result.base_resp?.err_msg !== 'ok' || !result.cdn_url) {
-          throw new Error(`图片上传失败: ${result.base_resp?.err_msg || '未知错误'}`);
+          const errCode = result.base_resp?.ret || result.ret;
+          const errMsg = result.base_resp?.err_msg || result.err_msg || '未知错误';
+          throw new Error(`图片上传失败 (${errCode}): ${errMsg}`);
         }
 
         console.log(`[WeChat Publisher] Image uploaded: ${result.cdn_url}`);
@@ -469,14 +484,21 @@ ${footnotes.map((f, i) => `<p style="margin: 5px 0; word-break: break-all;"><sup
       for (let i = 0; i < dataUrls.length; i++) {
         const dataUrl = dataUrls[i];
         uploadedCount++;
-        this.updateProgress(`上传本地图片 ${uploadedCount}/${totalImages}`);
+
+        // Get MIME type from data URL for logging
+        const mimeMatch = dataUrl.match(/data:([^;]+)/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'unknown';
+        this.updateProgress(`上传本地图片 ${uploadedCount}/${totalImages} (${mimeType})`);
 
         try {
           const cdnUrl = await this.uploadImage(dataUrl);
           // Data URLs are long, need to escape for regex
           processedHtml = processedHtml.split(dataUrl).join(cdnUrl);
+          console.log(`[WeChat Publisher] Local image ${i + 1} uploaded successfully: ${cdnUrl}`);
         } catch (error) {
-          console.warn(`[WeChat Publisher] Failed to upload local image ${i + 1}:`, error.message);
+          console.error(`[WeChat Publisher] Failed to upload local image ${i + 1} (${mimeType}):`, error.message);
+          // Keep data URL as fallback - WeChat might not display it
+          console.warn(`[WeChat Publisher] Image ${i + 1} will remain as data URL (may not display in WeChat)`);
         }
       }
 
